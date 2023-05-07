@@ -119,6 +119,8 @@ def english_cleaners(text):
     text = collapse_whitespace(text)
     return text
 
+def nepali_cleaners(text):
+    return text
 
 def phoneme_cleaners(text):
     """Pipeline for phonemes mode, including number and abbreviation expansion."""
