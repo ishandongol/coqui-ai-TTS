@@ -38,7 +38,8 @@ def noise_augment_audio(wav):
 
 def string2filename(string):
     # generate a safe and reversible filename based on a string
-    filename = base64.urlsafe_b64encode(string.encode("utf-8")).decode("utf-8", "ignore")
+    filename = base64.urlsafe_b64encode(
+        string.encode("utf-8")).decode("utf-8", "ignore")
     return filename
 
 
@@ -176,7 +177,8 @@ class TTSDataset(Dataset):
         lens = []
         for item in self.samples:
             _, wav_file, *_ = _parse_sample(item)
-            audio_len = os.path.getsize(wav_file) / 16 * 8  # assuming 16bit audio
+            audio_len = os.path.getsize(
+                wav_file) / 16 * 8  # assuming 16bit audio
             lens.append(audio_len)
         return lens
 
@@ -295,7 +297,8 @@ class TTSDataset(Dataset):
     def _compute_lengths(samples):
         new_samples = []
         for item in samples:
-            audio_length = os.path.getsize(item["audio_file"]) / 16 * 8  # assuming 16bit audio
+            audio_length = os.path.getsize(
+                item["audio_file"]) / 16 * 8  # assuming 16bit audio
             text_lenght = len(item["text"])
             item["audio_length"] = audio_length
             item["text_length"] = text_lenght
@@ -348,8 +351,10 @@ class TTSDataset(Dataset):
         # sort items based on the sequence length in ascending order
         text_lengths = [i["text_length"] for i in samples]
         audio_lengths = [i["audio_length"] for i in samples]
-        text_ignore_idx, text_keep_idx = self.filter_by_length(text_lengths, self.min_text_len, self.max_text_len)
-        audio_ignore_idx, audio_keep_idx = self.filter_by_length(audio_lengths, self.min_audio_len, self.max_audio_len)
+        text_ignore_idx, text_keep_idx = self.filter_by_length(
+            text_lengths, self.min_text_len, self.max_text_len)
+        audio_ignore_idx, audio_keep_idx = self.filter_by_length(
+            audio_lengths, self.min_audio_len, self.max_audio_len)
         keep_idx = list(set(audio_keep_idx) & set(text_keep_idx))
         ignore_idx = list(set(audio_ignore_idx) | set(text_ignore_idx))
 
@@ -398,7 +403,8 @@ class TTSDataset(Dataset):
             batch (Dict): Batch returned by `__getitem__`.
             text_lengths (List[int]): Lengths of the input character sequences.
         """
-        text_lengths, ids_sorted_decreasing = torch.sort(torch.LongTensor(text_lengths), dim=0, descending=True)
+        text_lengths, ids_sorted_decreasing = torch.sort(
+            torch.LongTensor(text_lengths), dim=0, descending=True)
         batch = [batch[idx] for idx in ids_sorted_decreasing]
         return batch, text_lengths, ids_sorted_decreasing
 
@@ -416,46 +422,54 @@ class TTSDataset(Dataset):
             token_ids_lengths = np.array([len(d["token_ids"]) for d in batch])
 
             # sort items with text input length for RNN efficiency
-            batch, token_ids_lengths, ids_sorted_decreasing = self._sort_batch(batch, token_ids_lengths)
+            batch, token_ids_lengths, ids_sorted_decreasing = self._sort_batch(
+                batch, token_ids_lengths)
 
             # convert list of dicts to dict of lists
             batch = {k: [dic[k] for dic in batch] for k in batch[0]}
 
             # get language ids from language names
             if self.language_id_mapping is not None:
-                language_ids = [self.language_id_mapping[ln] for ln in batch["language_name"]]
+                language_ids = [self.language_id_mapping[ln]
+                                for ln in batch["language_name"]]
             else:
                 language_ids = None
             # get pre-computed d-vectors
             if self.d_vector_mapping is not None:
                 embedding_keys = list(batch["audio_unique_name"])
-                d_vectors = [self.d_vector_mapping[w]["embedding"] for w in embedding_keys]
+                d_vectors = [self.d_vector_mapping[w]["embedding"]
+                             for w in embedding_keys]
             else:
                 d_vectors = None
 
             # get numerical speaker ids from speaker names
             if self.speaker_id_mapping:
-                speaker_ids = [self.speaker_id_mapping[sn] for sn in batch["speaker_name"]]
+                speaker_ids = [self.speaker_id_mapping[sn]
+                               for sn in batch["speaker_name"]]
             else:
                 speaker_ids = None
             # compute features
-            mel = [self.ap.melspectrogram(w).astype("float32") for w in batch["wav"]]
+            mel = [self.ap.melspectrogram(w).astype(
+                "float32") for w in batch["wav"]]
 
             mel_lengths = [m.shape[1] for m in mel]
 
             # lengths adjusted by the reduction factor
             mel_lengths_adjusted = [
-                m.shape[1] + (self.outputs_per_step - (m.shape[1] % self.outputs_per_step))
+                m.shape[1] + (self.outputs_per_step -
+                              (m.shape[1] % self.outputs_per_step))
                 if m.shape[1] % self.outputs_per_step
                 else m.shape[1]
                 for m in mel
             ]
 
             # compute 'stop token' targets
-            stop_targets = [np.array([0.0] * (mel_len - 1) + [1.0]) for mel_len in mel_lengths]
+            stop_targets = [np.array([0.0] * (mel_len - 1) + [1.0])
+                            for mel_len in mel_lengths]
 
             # PAD stop targets
-            stop_targets = prepare_stop_target(stop_targets, self.outputs_per_step)
+            stop_targets = prepare_stop_target(
+                stop_targets, self.outputs_per_step)
 
             # PAD sequences with longest instance in the batch
             token_ids = prepare_data(batch["token_ids"]).astype(np.int32)
@@ -486,7 +500,8 @@ class TTSDataset(Dataset):
             # compute linear spectrogram
             linear = None
             if self.compute_linear_spec:
-                linear = [self.ap.spectrogram(w).astype("float32") for w in batch["wav"]]
+                linear = [self.ap.spectrogram(w).astype(
+                    "float32") for w in batch["wav"]]
                 linear = prepare_tensor(linear, self.outputs_per_step)
                 linear = linear.transpose(0, 2, 1)
                 assert mel.shape[1] == linear.shape[1]
@@ -501,7 +516,8 @@ class TTSDataset(Dataset):
                 wav_padded = torch.zeros(len(batch["wav"]), 1, max_wav_len)
                 for i, w in enumerate(batch["wav"]):
                     mel_length = mel_lengths_adjusted[i]
-                    w = np.pad(w, (0, self.ap.hop_length * self.outputs_per_step), mode="edge")
+                    w = np.pad(w, (0, self.ap.hop_length *
+                               self.outputs_per_step), mode="edge")
                     w = w[: mel_length * self.ap.hop_length]
                     wav_padded[i, :, : w.shape[0]] = torch.from_numpy(w)
                 wav_padded.transpose_(1, 2)
@@ -510,14 +526,16 @@ class TTSDataset(Dataset):
             if self.compute_f0:
                 pitch = prepare_data(batch["pitch"])
                 assert mel.shape[1] == pitch.shape[1], f"[!] {mel.shape} vs {pitch.shape}"
-                pitch = torch.FloatTensor(pitch)[:, None, :].contiguous()  # B x 1 xT
+                pitch = torch.FloatTensor(
+                    pitch)[:, None, :].contiguous()  # B x 1 xT
             else:
                 pitch = None
             # format energy
             if self.compute_energy:
                 energy = prepare_data(batch["energy"])
                 assert mel.shape[1] == energy.shape[1], f"[!] {mel.shape} vs {energy.shape}"
-                energy = torch.FloatTensor(energy)[:, None, :].contiguous()  # B x 1 xT
+                energy = torch.FloatTensor(
+                    energy)[:, None, :].contiguous()  # B x 1 xT
             else:
                 energy = None
             # format attention masks
@@ -599,7 +617,8 @@ class PhonemeDataset(Dataset):
 
     def __getitem__(self, index):
         item = self.samples[index]
-        ids = self.compute_or_load(string2filename(item["audio_unique_name"]), item["text"], item["language"])
+        ids = self.compute_or_load(string2filename(
+            item["audio_unique_name"]), item["text"], item["language"])
         ph_hat = self.tokenizer.ids_to_text(ids)
         return {"text": item["text"], "ph_hat": ph_hat, "token_ids": ids, "token_ids_len": len(ids)}
 
@@ -644,7 +663,8 @@ class PhonemeDataset(Dataset):
         texts = [item["text"] for item in batch]
         texts_hat = [item["ph_hat"] for item in batch]
         ids_lens_max = max(ids_lens)
-        ids_torch = torch.LongTensor(len(ids), ids_lens_max).fill_(self.get_pad_id())
+        ids_torch = torch.LongTensor(
+            len(ids), ids_lens_max).fill_(self.get_pad_id())
         for i, ids_len in enumerate(ids_lens):
             ids_torch[i, :ids_len] = torch.LongTensor(ids[i])
         return {"text": texts, "ph_hat": texts_hat, "token_ids": ids_torch}
@@ -707,7 +727,8 @@ class F0Dataset:
 
     def __getitem__(self, idx):
         item = self.samples[idx]
-        f0 = self.compute_or_load(item["audio_file"], string2filename(item["audio_unique_name"]))
+        f0 = self.compute_or_load(
+            item["audio_file"], string2filename(item["audio_unique_name"]))
         if self.normalize_f0:
             assert self.mean is not None and self.std is not None, " [!] Mean and STD is not available"
             f0 = self.normalize(f0)
@@ -734,10 +755,12 @@ class F0Dataset:
             self.normalize_f0 = normalize_f0
 
         if self.normalize_f0:
-            computed_data = [tensor for batch in computed_data for tensor in batch]  # flatten
+            computed_data = [
+                tensor for batch in computed_data for tensor in batch]  # flatten
             pitch_mean, pitch_std = self.compute_pitch_stats(computed_data)
             pitch_stats = {"mean": pitch_mean, "std": pitch_std}
-            np.save(os.path.join(self.cache_path, "pitch_stats"), pitch_stats, allow_pickle=True)
+            np.save(os.path.join(self.cache_path, "pitch_stats"),
+                    pitch_stats, allow_pickle=True)
 
     def get_pad_id(self):
         return self.pad_id
@@ -757,11 +780,13 @@ class F0Dataset:
 
     @staticmethod
     def compute_pitch_stats(pitch_vecs):
-        nonzeros = np.concatenate([v[np.where(v != 0.0)[0]] for v in pitch_vecs])
+        nonzeros = np.concatenate([v[np.where(v != 0.0)[0]]
+                                  for v in pitch_vecs])
         mean, std = np.mean(nonzeros), np.std(nonzeros)
         return mean, std
 
     def load_stats(self, cache_path):
+        print(cache_path)
         stats_path = os.path.join(cache_path, "pitch_stats.npy")
         stats = np.load(stats_path, allow_pickle=True).item()
         self.mean = stats["mean"].astype(np.float32)
@@ -785,7 +810,8 @@ class F0Dataset:
         """
         compute pitch and return a numpy array of pitch values
         """
-        pitch_file = self.create_pitch_file_path(audio_unique_name, self.cache_path)
+        pitch_file = self.create_pitch_file_path(
+            audio_unique_name, self.cache_path)
         if not os.path.exists(pitch_file):
             pitch = self._compute_and_save_pitch(self.ap, wav_file, pitch_file)
         else:
@@ -797,7 +823,8 @@ class F0Dataset:
         f0s = [item["f0"] for item in batch]
         f0_lens = [len(item["f0"]) for item in batch]
         f0_lens_max = max(f0_lens)
-        f0s_torch = torch.LongTensor(len(f0s), f0_lens_max).fill_(self.get_pad_id())
+        f0s_torch = torch.LongTensor(
+            len(f0s), f0_lens_max).fill_(self.get_pad_id())
         for i, f0_len in enumerate(f0_lens):
             f0s_torch[i, :f0_len] = torch.LongTensor(f0s[i])
         return {"audio_unique_name": audio_unique_name, "f0": f0s_torch, "f0_lens": f0_lens}
@@ -858,7 +885,8 @@ class EnergyDataset:
 
     def __getitem__(self, idx):
         item = self.samples[idx]
-        energy = self.compute_or_load(item["audio_file"], string2filename(item["audio_unique_name"]))
+        energy = self.compute_or_load(
+            item["audio_file"], string2filename(item["audio_unique_name"]))
         if self.normalize_energy:
             assert self.mean is not None and self.std is not None, " [!] Mean and STD is not available"
             energy = self.normalize(energy)
@@ -885,10 +913,12 @@ class EnergyDataset:
             self.normalize_energy = normalize_energy
 
         if self.normalize_energy:
-            computed_data = [tensor for batch in computed_data for tensor in batch]  # flatten
+            computed_data = [
+                tensor for batch in computed_data for tensor in batch]  # flatten
             energy_mean, energy_std = self.compute_energy_stats(computed_data)
             energy_stats = {"mean": energy_mean, "std": energy_std}
-            np.save(os.path.join(self.cache_path, "energy_stats"), energy_stats, allow_pickle=True)
+            np.save(os.path.join(self.cache_path, "energy_stats"),
+                    energy_stats, allow_pickle=True)
 
     def get_pad_id(self):
         return self.pad_id
@@ -902,14 +932,16 @@ class EnergyDataset:
     @staticmethod
     def _compute_and_save_energy(ap, wav_file, energy_file=None):
         wav = ap.load_wav(wav_file)
-        energy = calculate_energy(wav, fft_size=ap.fft_size, hop_length=ap.hop_length, win_length=ap.win_length)
+        energy = calculate_energy(
+            wav, fft_size=ap.fft_size, hop_length=ap.hop_length, win_length=ap.win_length)
         if energy_file:
             np.save(energy_file, energy)
         return energy
 
     @staticmethod
     def compute_energy_stats(energy_vecs):
-        nonzeros = np.concatenate([v[np.where(v != 0.0)[0]] for v in energy_vecs])
+        nonzeros = np.concatenate([v[np.where(v != 0.0)[0]]
+                                  for v in energy_vecs])
         mean, std = np.mean(nonzeros), np.std(nonzeros)
         return mean, std
 
@@ -937,9 +969,11 @@ class EnergyDataset:
         """
         compute energy and return a numpy array of energy values
         """
-        energy_file = self.create_energy_file_path(audio_unique_name, self.cache_path)
+        energy_file = self.create_energy_file_path(
+            audio_unique_name, self.cache_path)
         if not os.path.exists(energy_file):
-            energy = self._compute_and_save_energy(self.ap, wav_file, energy_file)
+            energy = self._compute_and_save_energy(
+                self.ap, wav_file, energy_file)
         else:
             energy = np.load(energy_file)
         return energy.astype(np.float32)
@@ -949,7 +983,8 @@ class EnergyDataset:
         energys = [item["energy"] for item in batch]
         energy_lens = [len(item["energy"]) for item in batch]
         energy_lens_max = max(energy_lens)
-        energys_torch = torch.LongTensor(len(energys), energy_lens_max).fill_(self.get_pad_id())
+        energys_torch = torch.LongTensor(
+            len(energys), energy_lens_max).fill_(self.get_pad_id())
         for i, energy_len in enumerate(energy_lens):
             energys_torch[i, :energy_len] = torch.LongTensor(energys[i])
         return {"audio_unique_name": audio_unique_name, "energy": energys_torch, "energy_lens": energy_lens}
