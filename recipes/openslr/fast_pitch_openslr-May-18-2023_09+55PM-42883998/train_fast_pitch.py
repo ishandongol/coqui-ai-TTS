@@ -46,7 +46,7 @@ config = FastPitchConfig(
     f0_cache_path=os.path.join(output_path, "f0_cache"),
     run_eval=True,
     test_delay_epochs=-1,
-    epochs=10,
+    epochs=1000,
     text_cleaner="nepali_cleaners",
     precompute_num_workers=4,
     print_step=50,
@@ -58,8 +58,6 @@ config = FastPitchConfig(
     datasets=[dataset_config],
 )
 
-if config.model_args.use_aligner:
-    print("Wow!!")
 # compute alignments
 # if not config.model_args.use_aligner:
 #     manager = ModelManager()
