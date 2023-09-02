@@ -2,24 +2,25 @@ import os
 
 from trainer import Trainer, TrainerArgs
 
-from TTS.config.shared_configs import BaseAudioConfig, BaseDatasetConfig
-from TTS.tts.configs.fast_pitch_config import FastPitchConfig
+from TTS.config.shared_configs import BaseAudioConfig
+from TTS.tts.configs.shared_configs import BaseDatasetConfig
+from TTS.tts.configs.tacotron2_config import Tacotron2Config
 from TTS.tts.datasets import load_tts_samples
-from TTS.tts.models.forward_tts import ForwardTTS
+from TTS.tts.models.tacotron2 import Tacotron2
 from TTS.tts.utils.text.tokenizer import TTSTokenizer
 from TTS.utils.audio import AudioProcessor
-from TTS.utils.manage import ModelManager
-from TTS.tts.utils.speakers import SpeakerManager
+
+# from TTS.tts.datasets.tokenizer import Tokenizer
 
 output_path = os.path.dirname(os.path.abspath(__file__))
 
 # init configs
 dataset_config = BaseDatasetConfig(
-    formatter="openslr",
+    formatter="custom_nepali",
     meta_file_train="metadata.csv",
     language="ne-np",
-    path=os.path.join(output_path, "ne_np_female"),
-)
+    path=os.path.join(output_path, "dataset"),
+    )
 
 audio_config = BaseAudioConfig(
     sample_rate=22050,
@@ -34,41 +35,36 @@ audio_config = BaseAudioConfig(
     preemphasis=0.0,
 )
 
-config = FastPitchConfig(
-    run_name="fast_pitch_openslr",
+config = Tacotron2Config(  # This is the config that is saved for the future use
     audio=audio_config,
-    batch_size=16,
-    eval_batch_size=8,
-    eval_split_size=10,
+    batch_size=64,
+    eval_batch_size=16,
     num_loader_workers=4,
-    test_sentences=[],
-    num_eval_loader_workers=2,
-    compute_input_seq_cache=True,
-    compute_f0=True,
-    f0_cache_path=os.path.join(output_path, "f0_cache"),
+    num_eval_loader_workers=4,
     run_eval=True,
     test_delay_epochs=-1,
-    epochs=500,
+    ga_alpha=0.0,
+    decoder_loss_alpha=0.25,
+    postnet_loss_alpha=0.25,
+    postnet_diff_spec_alpha=0,
+    decoder_diff_spec_alpha=0,
+    decoder_ssim_alpha=0,
+    postnet_ssim_alpha=0,
+    r=2,
+    attention_type="dynamic_convolution",
+    double_decoder_consistency=False,
+    epochs=200,
     text_cleaner="nepali_cleaners",
-    precompute_num_workers=4,
-    print_step=50,
+    use_phonemes=False,
+    phoneme_language="en-us",
+    phoneme_cache_path=os.path.join(output_path, "phoneme_cache"),
+    print_step=25,
+    print_eval=True,
     cudnn_enable=True,
-    use_speaker_embedding=True,
-    print_eval=False,
     mixed_precision=False,
-    max_seq_len=500000,
     output_path=output_path,
     datasets=[dataset_config],
 )
-
-# compute alignments
-# if not config.model_args.use_aligner:
-#     manager = ModelManager()
-#     model_path, config_path, _ = manager.download_model("tts_models/en/ljspeech/tacotron2-DCA")
-#     # TODO: make compute_attention python callable
-#     os.system(
-#         f"python TTS/bin/compute_attention_masks.py --model_path {model_path} --config_path {config_path} --dataset ljspeech --dataset_metafile metadata.csv --data_path ./recipes/ljspeech/LJSpeech-1.1/  --use_cuda true"
-#     )
 
 # INITIALIZE THE AUDIO PROCESSOR
 # Audio processor is used for feature extraction and audio I/O.
@@ -92,17 +88,18 @@ train_samples, eval_samples = load_tts_samples(
     eval_split_size=config.eval_split_size,
 )
 
-# init speaker manager for multi-speaker training
-# it maps speaker-id to speaker-name in the model and data-loader
-speaker_manager = SpeakerManager()
-speaker_manager.set_ids_from_data(train_samples + eval_samples, parse_key="speaker_name")
-config.num_speakers = speaker_manager.num_speakers
+# INITIALIZE THE MODEL
+# Models take a config object and a speaker manager as input
+# Config defines the details of the model like the number of layers, the size of the embedding, etc.
+# Speaker manager is used by multi-speaker models.
+model = Tacotron2(config, ap, tokenizer)
 
-# init the model
-model = ForwardTTS(config, ap, tokenizer, speaker_manager=speaker_manager)
-
-# init the trainer and 🚀
+# INITIALIZE THE TRAINER
+# Trainer provides a generic API to train all the 🐸TTS models with all its perks like mixed-precision training,
+# distributed training, etc.
 trainer = Trainer(
     TrainerArgs(), config, output_path, model=model, train_samples=train_samples, eval_samples=eval_samples
 )
+
+# AND... 3,2,1... 🚀
 trainer.fit()
