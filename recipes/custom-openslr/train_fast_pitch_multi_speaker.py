@@ -9,12 +9,13 @@ from TTS.tts.models.forward_tts import ForwardTTS
 from TTS.tts.utils.text.tokenizer import TTSTokenizer
 from TTS.utils.audio import AudioProcessor
 from TTS.utils.manage import ModelManager
+from TTS.tts.utils.speakers import SpeakerManager
 
 output_path = os.path.dirname(os.path.abspath(__file__))
 
 # init configs
 dataset_config = BaseDatasetConfig(
-    formatter="custom_nepali",
+    formatter="openslr",
     meta_file_train="metadata.csv",
     language="ne-np",
     path=os.path.join(output_path, "dataset"),
@@ -34,21 +35,22 @@ audio_config = BaseAudioConfig(
 )
 
 config = FastPitchConfig(
-    run_name="fast_pitch_default_config",
+    run_name="fast_pitch_batch_16_config_custom_openslr",
     audio=audio_config,
-    batch_size=32,
-    eval_batch_size=16,
-    num_loader_workers=8,
-    num_eval_loader_workers=4,
+    batch_size=16,
+    eval_batch_size=8,
+    num_loader_workers=2,
+    num_eval_loader_workers=2,
     compute_input_seq_cache=True,
     use_phonemes=False,
     compute_f0=True,
+    test_sentences=[],
     f0_cache_path=os.path.join(output_path, "f0_cache"),
     run_eval=True,
     test_delay_epochs=-1,
-    epochs=122,
+    epochs=214,
     text_cleaner="nepali_cleaners",
-    precompute_num_workers=4,
+    precompute_num_workers=2,
     print_step=50,
     cudnn_enable=True,
     print_eval=False,
@@ -56,6 +58,7 @@ config = FastPitchConfig(
     max_seq_len=500000,
     output_path=output_path,
     datasets=[dataset_config],
+    use_speaker_embedding=True,
 )
 
 # compute alignments
@@ -89,8 +92,15 @@ train_samples, eval_samples = load_tts_samples(
     eval_split_size=config.eval_split_size,
 )
 
+# init speaker manager for multi-speaker training
+# it maps speaker-id to speaker-name in the model and data-loader
+speaker_manager = SpeakerManager()
+speaker_manager.set_ids_from_data(
+    train_samples + eval_samples, parse_key="speaker_name")
+config.num_speakers = speaker_manager.num_speakers
+
 # init the model
-model = ForwardTTS(config, ap, tokenizer, speaker_manager=None)
+model = ForwardTTS(config, ap, tokenizer, speaker_manager=speaker_manager)
 
 # init the trainer and 🚀
 trainer = Trainer(

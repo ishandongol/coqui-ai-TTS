@@ -35,14 +35,13 @@ audio_config = BaseAudioConfig(
 )
 
 config = FastPitchConfig(
-    run_name="fast_pitch_openslr",
+    run_name="fast_pitch_openslr_2500e",
     audio=audio_config,
     batch_size=16,
     eval_batch_size=8,
-    eval_split_size=10,
-    num_loader_workers=4,
-    test_sentences=[],
+    num_loader_workers=2,
     num_eval_loader_workers=2,
+    test_sentences=[],
     compute_input_seq_cache=True,
     compute_f0=True,
     f0_cache_path=os.path.join(output_path, "f0_cache"),
@@ -95,7 +94,8 @@ train_samples, eval_samples = load_tts_samples(
 # init speaker manager for multi-speaker training
 # it maps speaker-id to speaker-name in the model and data-loader
 speaker_manager = SpeakerManager()
-speaker_manager.set_ids_from_data(train_samples + eval_samples, parse_key="speaker_name")
+speaker_manager.set_ids_from_data(
+    train_samples + eval_samples, parse_key="speaker_name")
 config.num_speakers = speaker_manager.num_speakers
 
 # init the model

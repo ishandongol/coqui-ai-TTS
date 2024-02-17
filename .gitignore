@@ -171,3 +171,6 @@ coqui_recipes/*
 local_scripts/*
 recipes/openslr/ne_np_female
 recipes/custom/dataset
+recipes/custom-openslr/dataset
+recipes/openslr/ne_np_female
+recipes/custom/dataset
